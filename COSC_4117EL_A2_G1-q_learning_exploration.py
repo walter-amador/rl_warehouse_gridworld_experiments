@@ -111,7 +111,7 @@ def train_exploration_bonus(
     episode_rewards = []
     episode_success = []
 
-    for episode in range(num_episodes):
+    for _ in range(num_episodes):
         state     = world.reset()
         state_idx = world.state_to_index(state)
         total_reward = 0.0
@@ -562,6 +562,104 @@ def checkpoint_8_head_to_head():
 # The pygame window shows the robot moving step by step.
 # Press any key or wait for the episode to finish, then the window closes.
 
+def visualize_policy_and_value(
+    q_table: np.ndarray,
+    world: WarehouseGridWorld,
+    title: str,
+) -> None:
+    """
+    Plot policy arrows and value function heatmap for the 3 meaningful task phases:
+      Phase 0: (row, col, has_package=0, delivered=0) → heading to pickup
+      Phase 1: (row, col, has_package=1, delivered=0) → heading to packing
+      Phase 2: (row, col, has_package=0, delivered=1) → returning to dock
+
+    Color = max Q-value per cell (green = high value, red = low value).
+    Arrow = best action the agent would take from that cell.
+    Black = shelf (impassable).
+    """
+    try:
+        import matplotlib.pyplot as plt
+    except ImportError:
+        print("  matplotlib not found — skipping policy/value visualization")
+        return
+
+    ACTION_DX = {"up": 0,  "down": 0,  "left": -1, "right": 1}
+    ACTION_DY = {"up": -1, "down": 1,  "left":  0, "right": 0}
+
+    phases = [
+        (0, 0, "Phase 0 — Find Pickup\n(no package, not delivered)"),
+        (1, 0, "Phase 1 — Deliver Package\n(has package, not delivered)"),
+        (1, 1, "Phase 2 — Return to Dock\n(has package, delivered)"),
+    ]
+
+    fig, axes = plt.subplots(1, 3, figsize=(18, 6))
+    fig.suptitle(title, fontsize=13)
+
+    grid = world.grid
+    size = world.size
+
+    for ax, (has_pkg, delivered, phase_label) in zip(axes, phases):
+        value_matrix = np.full((size, size), np.nan)
+        arrow_u = np.zeros((size, size))
+        arrow_v = np.zeros((size, size))
+
+        for r in range(size):
+            for c in range(size):
+                if grid[r, c] == 1:   # SHELF
+                    continue
+                state_idx = world.state_to_index((r, c, has_pkg, delivered))
+                q_row     = q_table[state_idx]
+                value_matrix[r, c] = np.max(q_row)
+                best_action = ACTIONS[int(np.argmax(q_row))]
+                arrow_u[r, c] = ACTION_DX[best_action]
+                arrow_v[r, c] = ACTION_DY[best_action]
+
+        masked = np.ma.masked_invalid(value_matrix)
+        im = ax.imshow(masked, cmap="RdYlGn", origin="upper",
+                       vmin=np.nanmin(value_matrix), vmax=np.nanmax(value_matrix))
+
+        shelf_overlay = np.zeros((size, size, 4))
+        for r in range(size):
+            for c in range(size):
+                if grid[r, c] == 1:
+                    shelf_overlay[r, c] = [0, 0, 0, 1]
+        ax.imshow(shelf_overlay, origin="upper")
+
+        for r in range(size):
+            for c in range(size):
+                if grid[r, c] == 1:
+                    continue
+                ax.annotate(
+                    "", xy=(c + arrow_u[r, c] * 0.35, r + arrow_v[r, c] * 0.35),
+                    xytext=(c, r),
+                    arrowprops=dict(arrowstyle="->", color="black", lw=1.2),
+                )
+
+        pr, pc = world.pickup_pos
+        dr, dc = world.packing_pos
+        kr, kc = world.dock_pos
+        for (mr, mc, label, color) in [
+            (pr, pc, "P", "blue"),
+            (dr, dc, "D", "gold"),
+            (kr, kc, "C", "green"),
+        ]:
+            ax.text(mc, mr, label, ha="center", va="center",
+                    fontsize=11, fontweight="bold", color=color)
+
+        ax.set_title(phase_label, fontsize=10)
+        ax.set_xticks(range(size))
+        ax.set_yticks(range(size))
+        ax.tick_params(labelsize=7)
+        plt.colorbar(im, ax=ax, fraction=0.046, label="Max Q-value")
+
+    plt.tight_layout()
+    safe_title = title.replace(" ", "_").replace("(", "").replace(")", "").replace(",", "")
+    filename = f"policy_arrows_{safe_title[:40]}.png"
+    plt.savefig(filename, dpi=120, bbox_inches="tight")
+    print(f"  Policy/value plot saved → {filename}")
+    plt.show()
+
+
 def plot_combined_comparison(
     eg_rewards: list[float],
     bon_rewards: list[float],
@@ -713,7 +811,7 @@ def checkpoint_9_visualization():
         n_s = w.get_state_space_size()
         n_a = w.get_action_space_size()
         q   = np.zeros((n_s, n_a))
-        eps_start, eps_min, decay_ep = 1.0, 0.05, 300
+        eps_start, eps_min, decay_ep = 1.0, 0.05, 300  # medium decay for 500 episodes
         for ep in range(NUM_EPISODES):
             frac    = min(ep / decay_ep, 1.0)
             epsilon = max(eps_min, eps_start - frac * (eps_start - eps_min))
@@ -744,6 +842,19 @@ def checkpoint_9_visualization():
     # ── Combined comparison plot ──────────────────────────────────────────────
     print("\n[1] Generating combined comparison plot ...")
     plot_combined_comparison(eg_r, bon_r, eg_s, bon_s, SEED)
+
+    # ── Policy arrows & value function ───────────────────────────────────────
+    print("\n[1b] Policy arrows — Epsilon-Greedy ...")
+    visualize_policy_and_value(
+        q_eg, WarehouseGridWorld(seed=SEED),
+        title=f"Epsilon-Greedy Policy (α={ALPHA}, γ={GAMMA}, seed={SEED})",
+    )
+
+    print("\n[1c] Policy arrows — Exploration Bonus ...")
+    visualize_policy_and_value(
+        q_bon, WarehouseGridWorld(seed=SEED),
+        title=f"Exploration Bonus Policy (k={BEST_K}, α={ALPHA}, γ={GAMMA}, seed={SEED})",
+    )
 
     # ── Pygame demos ─────────────────────────────────────────────────────────
     print("\n[2] Launching Epsilon-Greedy demo (watch the robot navigate) ...")

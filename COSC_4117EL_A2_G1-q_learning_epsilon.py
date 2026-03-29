@@ -1046,6 +1046,117 @@ def checkpoint_6_best_config_evaluation():
 
 
 
+def visualize_policy_and_value(
+    q_table: np.ndarray,
+    world: WarehouseGridWorld,
+    title: str,
+) -> None:
+    """
+    Plot policy arrows and value function heatmap for the 3 meaningful task phases:
+      Phase 0: (row, col, has_package=0, delivered=0) → agent heading to pickup
+      Phase 1: (row, col, has_package=1, delivered=0) → agent heading to packing
+      Phase 2: (row, col, has_package=0, delivered=1) → agent returning to dock
+
+    Each subplot shows:
+      - Color heatmap: max Q-value per cell (brighter = agent prefers this cell)
+      - Arrow: best action the agent would take from that cell
+      - Black cells: shelves (impassable, no Q-values)
+    """
+    try:
+        import matplotlib.pyplot as plt
+        import matplotlib.patches as mpatches
+        from matplotlib.colors import Normalize
+        from matplotlib.cm import ScalarMappable
+    except ImportError:
+        print("  matplotlib not found — skipping policy/value visualization")
+        return
+
+    # Arrow directions: up, down, left, right
+    ACTION_DX = {"up": 0,  "down": 0,  "left": -1, "right": 1}
+    ACTION_DY = {"up": -1, "down": 1, "left":  0, "right": 0}
+
+    phases = [
+        (0, 0, "Phase 0 — Find Pickup\n(no package, not delivered)"),
+        (1, 0, "Phase 1 — Deliver Package\n(has package, not delivered)"),
+        (1, 1, "Phase 2 — Return to Dock\n(has package, delivered)"),
+    ]
+
+    fig, axes = plt.subplots(1, 3, figsize=(18, 6))
+    fig.suptitle(title, fontsize=13)
+
+    grid = world.grid
+    size = world.size
+
+    for ax, (has_pkg, delivered, phase_label) in zip(axes, phases):
+        # Build value matrix and arrow fields
+        value_matrix = np.full((size, size), np.nan)
+        arrow_u = np.zeros((size, size))
+        arrow_v = np.zeros((size, size))
+
+        for r in range(size):
+            for c in range(size):
+                if grid[r, c] == SHELF:
+                    continue
+                state     = (r, c, has_pkg, delivered)
+                state_idx = world.state_to_index(state)
+                q_row     = q_table[state_idx]
+
+                value_matrix[r, c] = np.max(q_row)
+
+                best_action = ACTIONS[int(np.argmax(q_row))]
+                arrow_u[r, c] = ACTION_DX[best_action]
+                arrow_v[r, c] = ACTION_DY[best_action]
+
+        # Draw heatmap
+        masked = np.ma.masked_invalid(value_matrix)
+        im = ax.imshow(masked, cmap="RdYlGn", origin="upper",
+                       vmin=np.nanmin(value_matrix), vmax=np.nanmax(value_matrix))
+
+        # Draw shelves as black
+        shelf_overlay = np.zeros((size, size, 4))
+        for r in range(size):
+            for c in range(size):
+                if grid[r, c] == SHELF:
+                    shelf_overlay[r, c] = [0, 0, 0, 1]
+        ax.imshow(shelf_overlay, origin="upper")
+
+        # Draw policy arrows on passable cells
+        for r in range(size):
+            for c in range(size):
+                if grid[r, c] == SHELF:
+                    continue
+                ax.annotate(
+                    "", xy=(c + arrow_u[r, c] * 0.35, r + arrow_v[r, c] * 0.35),
+                    xytext=(c, r),
+                    arrowprops=dict(arrowstyle="->", color="black", lw=1.2),
+                )
+
+        # Mark special cells
+        pr, pc = world.pickup_pos
+        dr, dc = world.packing_pos
+        kr, kc = world.dock_pos
+        for (mr, mc, label, color) in [
+            (pr, pc, "P", "blue"),
+            (dr, dc, "D", "gold"),
+            (kr, kc, "C", "green"),
+        ]:
+            ax.text(mc, mr, label, ha="center", va="center",
+                    fontsize=11, fontweight="bold", color=color)
+
+        ax.set_title(phase_label, fontsize=10)
+        ax.set_xticks(range(size))
+        ax.set_yticks(range(size))
+        ax.tick_params(labelsize=7)
+        plt.colorbar(im, ax=ax, fraction=0.046, label="Max Q-value")
+
+    plt.tight_layout()
+    safe_title = title.replace(" ", "_").replace("(", "").replace(")", "").replace(",", "")
+    filename = f"policy_arrows_{safe_title[:40]}.png"
+    plt.savefig(filename, dpi=120, bbox_inches="tight")
+    print(f"  Policy/value plot saved → {filename}")
+    plt.show()
+
+
 def run_pygame_demo_epsilon(q_table: np.ndarray, seed: int, step_delay_ms: int = 250) -> None:
     """Animate one evaluation episode for the epsilon-greedy agent."""
     try:
@@ -1094,6 +1205,13 @@ if __name__ == "__main__":
     checkpoint_4_gamma_experiments()
     checkpoint_5_epsilon_decay()
     q_table, _, _ = checkpoint_6_best_config_evaluation()
+    print("\nGenerating policy arrows & value function ...")
+    world_vis = WarehouseGridWorld(seed=SEED)
+    visualize_policy_and_value(
+        q_table, world_vis,
+        title=f"Epsilon-Greedy Policy (α={BEST_ALPHA}, γ={BEST_GAMMA}, seed={SEED})",
+    )
+
     print("\nLaunching Epsilon-Greedy pygame demo ...")
     print("Close the window or press any key to exit.")
     run_pygame_demo_epsilon(q_table, seed=SEED)
