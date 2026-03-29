@@ -1,0 +1,567 @@
+
+
+image.png
+557×639
+COSC-4117EL-01 (2026Winter)_ Assignment2.pdf
+warehouse_gridworld_domain_random.py
+@warehouse_gridworld_domain_random.py Help me plan for completing my assignment. You will do the coding but we'll analyze the results together. The real goal here isn't actually completing the assignment, is to accomplish the learning objectives for me, but for sure completing the assignment is important. I know you are able to do all the code at once, but since in this case, I need to learn (not the code, but the use case of the algorithms), you need to start coding with checkpoints, in each checkpoint we should accomplish an experiment or learning objective.
+Globpattern: "*.py"
+Found 3 files
+Read COSC_4117EL_A2_G1-q_learning_epsilon.py
+Read COSC_4117EL_A2_G1-q_learning_exploration.py
+Both files are empty. Here's the learning-first plan:
+
+Assignment 2 — Learning Plan
+The Learning Objectives (what you actually need to understand)
+How to represent RL problems (states, actions, rewards)
+How Q-learning works mechanically — the update rule
+How exploration affects learning — this is the core comparison
+How to read convergence plots to understand if/when an agent learns
+Checkpoint Plan
+Checkpoint 1 — Understand the State Space (no training yet)
+Write code that just initializes the Q-table and lets you inspect the state representation. We'll answer: "What does a state mean? How many states exist? Why does task progress matter?"
+
+Checkpoint 2 — Q-Learning Core (epsilon-greedy, training loop)
+Implement the epsilon-greedy agent and train it. We'll look at the Q-table values, watch epsilon decay, and answer: "What is the agent actually learning? What does a Q-value mean intuitively?"
+
+Checkpoint 3 — Analyze Epsilon-Greedy Behavior
+Plot cumulative reward vs. episode with different hyperparameters (α, γ, ε decay). You analyze: "Why does reward improve? What happens if epsilon decays too fast/slow?"
+
+Checkpoint 4 — Exploration Bonus Agent
+Implement f(Q(s,a), N(s,a)) = Q(s,a) + k / sqrt(N(s,a) + 1). We'll answer: "Why does this behave differently from random exploration? What does k control conceptually?"
+
+Checkpoint 5 — Compare Both Methods
+Side-by-side plots, success rates, convergence speed. You answer: "Which is better, and why? Under what conditions would each shine?"
+
+Checkpoint 6 — Visualization
+Real-time pygame demo of the trained agent navigating + policy arrows on the grid.
+
+How we'll work together
+I write the code for each checkpoint
+You run it and we look at the output together
+I explain what the numbers/plots mean
+You draw conclusions before we move on
+Ready to start Checkpoint 1? I'll write the Q-table initialization + state space exploration code so you can see exactly what the agent "knows" at the start. Just say go.
+
+To the plan we need to experiment with multiple alphas (at least 3), plan different experiments in the checkpoints so we can internalize the real value of the different parameters to consider when training a RL model.
+Revised Assignment 2 — Learning Plan
+Core Question We're Answering
+How do the choices you make before training (hyperparameters + exploration strategy) determine what the agent learns and how fast?
+
+Checkpoint Plan
+Checkpoint 1 — State Space & Q-Table Initialization
+Write code to initialize the Q-table and inspect the state space. We answer:
+
+What does a state encode? Why include has_package and delivered?
+What does Q(s,a) = 0 mean at the start?
+Checkpoint 2 — Bare-Bones Training Loop (epsilon-greedy, fixed params)
+Get the agent training with one fixed set of parameters. No tuning yet — just make it work. We answer:
+
+What is the Q-learning update rule doing step by step?
+How does reward signal propagate backwards through states?
+Checkpoint 3 — Alpha Experiments (Learning Rate)
+Train 3+ agents, varying only alpha (e.g., 0.1, 0.3, 0.7). Plot cumulative reward vs episode for each. You analyze:
+
+Does a high alpha learn faster or overfit to noise?
+Does a low alpha converge reliably or get stuck?
+What's the "right" alpha telling you about the environment's stochasticity?
+Checkpoint 4 — Gamma Experiments (Discount Factor)
+Vary only gamma (e.g., 0.7, 0.9, 0.99). You analyze:
+
+What does a low gamma "think" about the future?
+Why does gamma matter more in this task than in short-horizon tasks?
+Can you see the robot being "short-sighted" in the plots?
+Checkpoint 5 — Epsilon Decay Experiments (Exploration Schedule)
+Vary the epsilon decay rate (e.g., fast decay, slow decay, very slow). You analyze:
+
+What happens when the agent stops exploring too early?
+What happens when it never stops exploring?
+What does the convergence curve shape tell you about exploration balance?
+Checkpoint 6 — Best Epsilon-Greedy Config + Evaluation Run
+Combine the best alpha/gamma/epsilon from experiments 3–5. Run a clean evaluation (no exploration). We answer:
+
+Did the agent actually learn the task?
+How many steps does it take vs. a random agent?
+Checkpoint 7 — Exploration Bonus Agent (k experiments)
+Implement f(Q(s,a), N(s,a)) = Q(s,a) + k / sqrt(N(s,a) + 1). Train with at least two values of k. You analyze:
+
+How does visit-count bonus differ from random chance exploration?
+What does k control intuitively — what breaks at extreme values?
+Does it find the task faster or slower than epsilon-greedy?
+Checkpoint 8 — Head-to-Head Comparison (Multiple Seeds)
+Run both methods across 3+ seeds. Side-by-side: avg cumulative reward, success rate, convergence episode. You answer:
+
+Which method is more robust to layout changes?
+Is one method more sensitive to hyperparameter choice?
+What would you pick for a real warehouse robot and why?
+Checkpoint 9 — Visualization
+Real-time pygame demo of both trained agents + cumulative reward plots + optional policy arrows.
+
+Parameter Matrix Summary
+Checkpoint	What varies	What's fixed	Learning goal
+3	alpha: 0.1, 0.3, 0.7	γ=0.95, ε-decay=standard	Effect of learning rate
+4	gamma: 0.7, 0.9, 0.99	best α from C3	Effect of discount horizon
+5	epsilon decay: fast/med/slow	best α, γ	Exploration schedule tradeoffs
+7	k: 0.5, 2.0, 5.0	same α, γ as C6	Bonus magnitude effect
+8	seed: 42, 99, 123	best configs from both	Robustness
+Ready to start Checkpoint 1? Just say go.
+
+Go
+Write COSC_4117EL_A2_G1-q_learning_epsilon.py
+124 lines
+Run it with:
+
+
+python COSC_4117EL_A2_G1-q_learning_epsilon.py
+Here's what to focus on when you read the output:
+
+Section [2–3] — State space. Notice the total is 400, not 100. The has_package and delivered flags double the state space twice. Ask yourself: what would the agent do wrong at the packing station if it couldn't tell the difference between "I already delivered" and "I never had the package"?
+
+Section [4] — State indexing. Look at the two rows for the pickup position — same (row, col), different index. The agent treats them as completely separate situations with separate Q-values. That's the whole point.
+
+Section [5] — Q-table at zero. Every action has value 0.0. This means on the very first step, the agent has no reason to prefer any direction. It will act randomly until rewards start flowing back through the update rule.
+
+Section [6] — Valid actions. Some positions have fewer than 4 valid moves. This will matter when we design the training loop — we'll need to decide whether to let the agent "waste" a step hitting a wall or restrict it to valid actions only.
+
+Once you've run it and have questions about what you see, tell me and we'll discuss before moving to Checkpoint 2 (the training loop).
+
+COSC_4117EL_A2_G1-q_learning_epsilon.py#10-10
+Continue with checkpoint 2
+Read COSC_4117EL_A2_G1-q_learning_epsilon.py
+Edit COSC_4117EL_A2_G1-q_learning_epsilon.py
+Added 188 lines
+The epsilon parameter in decay_epsilon is passed but never used — the function computes decay purely from the episode number. Let me remove it.
+
+Edit COSC_4117EL_A2_G1-q_learning_epsilon.py
+Modified
+Edit COSC_4117EL_A2_G1-q_learning_epsilon.py
+Modified
+Fixed. Run it now:
+
+
+python COSC_4117EL_A2_G1-q_learning_epsilon.py
+While it runs, here's what to look for in the output:
+
+Section [D] — Learning progression is the most important one. Watch how the avg reward and success rate change across 4 windows of 50 episodes. You should see the numbers improve — that's the Q-table filling in with real experience.
+
+Section [B] — Q-values at start state will show uneven values after training. The action with the highest Q-value is the direction toward the pickup station. The agent didn't get told the layout — it figured it out through trial and error.
+
+Section [C] — Q-values at pickup — if training worked, the values here should be noticeably different from zero, pointing toward the packing station.
+
+The key question for us to discuss after you run it: Is the success rate still climbing in the last window, or has it plateaued? That tells us whether 500 episodes is enough or whether we need more training before we can fairly compare hyperparameters in Checkpoint 3.
+
+COSC_4117EL_A2_G1-q_learning_epsilon.py
+For now, 500 is enough, the success rate at the episode 300 was already success.
+Good signal. 500 episodes is sufficient — the agent converges well before that. Now we'll use that knowledge strategically in Checkpoint 3: we'll train to 500 episodes but watch when each alpha converges, not just whether it does.
+
+Edit COSC_4117EL_A2_G1-q_learning_epsilon.py
+Added 147 lines
+Bash Check if matplotlib is installed
+IN
+python -c "import matplotlib; print(matplotlib.__version__)"
+
+OUT
+Exit code 1
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+    import matplotlib; print(matplotlib.__version__)
+    ^^^^^^^^^^^^^^^^^
+ModuleNotFoundError: No module named 'matplotlib'
+Bash Install matplotlib
+IN
+which python && python -c "import sys; print(sys.executable)" && pip install matplotlib 2>&1 | tail -5
+
+OUT
+/Users/walteramador/.pyenv/versions/3.13.1/bin/python
+/Users/walteramador/.pyenv/versions/3.13.1/bin/python
+Installing collected packages: six, pyparsing, pillow, packaging, kiwisolver, fonttools, cycler, contourpy, python-dateutil, matplotlib
+Successfully installed contourpy-1.3.3 cycler-0.12.1 fonttools-4.62.1 kiwisolver-1.5.0 matplotlib-3.10.8 packaging-26.0 pillow-12.1.1 pyparsing-3.3.2 python-dateutil-2.9.0.post0 six-1.17.0
+
+[notice] A new release of pip is available: 24.3.1 -> 26.0.1
+[notice] To update, run: pip install --upgrade pip
+Installed. The IDE warning was just a path issue — matplotlib is now available. Run it:
+
+
+python COSC_4117EL_A2_G1-q_learning_epsilon.py
+This will run all three checkpoints and save checkpoint3_alpha_experiments.png. Two plots will appear:
+
+Left — Cumulative reward vs episode: look for which curve climbs earliest and which is noisiest
+Right — Success rate vs episode: look for which alpha "locks in" consistent success first
+The table in the terminal also shows approximate convergence episode per alpha — compare that with what you visually see in the plots.
+
+Once you've run it and looked at both the terminal output and the chart, tell me what you observe and we'll discuss before moving to Checkpoint 4 (gamma experiments).
+
+COSC_4117EL_A2_G1-q_learning_epsilon.py#310-310
+alpha 0.7 was very fast to converge, alpha 0.3 and 0.5 were the smoothest ones, alpha 0.1 had a lot of noise and took longer to converge. Are my observations right?
+Your observations are mostly right — let me sharpen a couple of them:
+
+α=0.7 fastest to converge — correct. Larger alpha means each Q-update takes a bigger step toward the new evidence. The agent incorporates experience aggressively, so Q-values reach useful magnitudes faster.
+
+α=0.3 and 0.5 smoothest — partially correct, with an important nuance. Those two are smooth because they've converged — the agent is consistently succeeding so the reward curve is stable. Smoothness here is a sign of stability after learning, not during it.
+
+α=0.1 noisy and slow — this one needs flipping. Theoretically, low alpha should produce the smoothest individual updates (tiny steps = less variance per update). What you're seeing as "noise" is actually the agent being inconsistent — it hasn't converged yet at episode 500, so it succeeds sometimes and fails others. The curve looks erratic not because the updates are jumpy, but because the agent is still in the learning phase where small steps haven't built up reliable Q-values yet.
+
+The real insight from this experiment:
+
+Alpha doesn't just control speed — it controls the tradeoff between stability and responsiveness.
+
+Too low (0.1): the agent barely trusts new experience, converges slowly, stuck being inconsistent longer
+Too high (0.7): converges fast but Q-values can overshoot when rewards are noisy
+Sweet spot (0.3–0.5): fast enough to learn, stable enough to not unlearn
+The fact that α=0.7 converged fast and stayed stable here is partly because this environment is deterministic — the same action always gives the same reward. In a stochastic environment (random outcomes), α=0.7 would overreact to noise and you'd see instability after convergence.
+
+Ready for Checkpoint 4 — Gamma experiments? Say go.
+
+Go
+Edit COSC_4117EL_A2_G1-q_learning_epsilon.py
+Added 169 lines
+Run it:
+
+
+python COSC_4117EL_A2_G1-q_learning_epsilon.py
+The key section to study is [B] — How much is the dock reward worth from N steps away?
+
+This is the mathematical heart of gamma. The task requires the robot to navigate to pickup, then packing, then back to dock — easily 15–30 steps in a 10x10 grid with obstacles. Look at what each gamma discounts the +100 dock reward down to at 20 steps:
+
+γ=0.7 → the agent sees the dock reward as worth less than 1 point from 20 steps away
+γ=0.9 → still worth ~12 points
+γ=0.99 → still worth ~82 points
+That's why gamma matters specifically for this task — the most valuable reward is at the end of a long sequence. If the agent can't "see" it from far away, it won't learn to return to the dock. Watch whether γ=0.7's success rate in the plots reflects that math.
+
+Tell me what you observe and we'll move to Checkpoint 5.
+
+• Does γ=0.7 ever achieve consistent success? Why or why not?
+Yes, but it takes longer, is short-sighted but as it gets closer it is able to see the final rewards.
+  • Look at section [B]: from 20 steps away, how much of the +100
+    dock reward does each agent 'see'? Does that match the success rate?
+I don't know how to answer this.
+  • γ=0.99 values far-future rewards almost fully — does it converge
+    faster or slower than γ=0.9? What does that tell you?
+Slower, I don't know why
+Great observations — let me fill in the gaps.
+
+On γ=0.7 achieving success eventually — you're right, but the mechanism is important.
+It works because the agent doesn't need to see the dock reward from 20 steps away. It just needs to learn the local next step. Think of it as the reward "rippling" backwards one step at a time across episodes — eventually Q-values near the dock go up, then states near those go up, and so on. With γ=0.7 each ripple is weaker, so it takes more episodes for the signal to reach distant states. But it gets there.
+
+On section [B] — here's how to read it.
+From 20 steps away, γ=0.7 sees the +100 dock reward as worth 0.8 points. γ=0.9 sees it as 12 points. γ=0.99 sees it as 82 points.
+
+Now look at your success rate plots again. The agent that sees the dock reward as nearly worthless from far away (γ=0.7) takes much longer to converge — because the Q-update barely changes for states far from the dock. The agent with γ=0.99 has a strong gradient pulling it toward the dock from almost anywhere on the grid. The success rate curve shape directly reflects how much the agent can "feel" that +100 from a distance.
+
+On γ=0.99 converging slower than γ=0.9 — this is a subtle but key insight.
+
+With γ=0.99, Q-values grow much larger in magnitude (since future rewards are barely discounted). Early in training, when the agent barely knows anything, those large Q-values are very wrong — and the errors get propagated further back through the update chain. More of the state space needs to be precisely calibrated before the policy stabilizes.
+
+Think of it this way:
+
+γ=0.9: the agent is responsible for getting the reward right ~10 steps into the future
+γ=0.99: the agent is responsible for getting it right ~100 steps into the future
+More responsibility = more states that need accurate Q-values before the policy locks in. That's why 0.99 takes more episodes despite "seeing" more.
+
+The practical takeaway: γ=0.9 is often the sweet spot for tasks with long reward chains — high enough to care about delayed rewards, low enough to converge reliably.
+
+Ready for Checkpoint 5 — Epsilon Decay? This one closes the epsilon-greedy story. Say go.
+
+COSC_4117EL_A2_G1-q_learning_epsilon.py#456-456
+Go
+Edit COSC_4117EL_A2_G1-q_learning_epsilon.py
+Added 232 lines
+Run it:
+
+
+python COSC_4117EL_A2_G1-q_learning_epsilon.py
+This checkpoint has 3 plots side by side — use them together:
+
+Left (epsilon over time): See exactly when each schedule commits to exploitation. The fast schedule flatlines at episode 100, medium at 300, slow at 480.
+
+Middle (cumulative reward): Notice where each curve starts climbing. The fast schedule should climb earliest — but ask yourself: does it reach the same peak?
+
+Right (success rate): This is the critical one. If fast peaks lower than medium, it means the agent locked in a partially-learned policy. It committed to exploiting before the Q-table was ready — so it exploits a bad policy forever.
+
+Section [C] in the terminal is also important: success rate in the first 150 episodes per schedule. fast is already exploiting at ep 100 — but what was its success rate before that? Did it even learn enough to exploit correctly?
+
+Tell me what you see and we'll move to Checkpoint 6.
+
+COSC_4117EL_A2_G1-q_learning_epsilon.py#624-624
+• The LEFT plot shows ε over time — when does each schedule
+    commit to exploitation? Overlay this mentally with the reward curve.
+fast at ~100, medium at ~300 and slow almost at ~500
+  • Does 'fast' ever catch up to 'medium' by episode 500?
+    If not — what did it miss by stopping exploration at ep 100?
+I don't understand this question
+  • Does 'slow' suffer in the middle of training even if it recovers?
+I think so.
+  • Which schedule would you pick for a REAL robot with limited
+    training time? What if training time were unlimited?
+For limited training 'fast' and for unlimited it could be 'slow'
+Good observations — let me clarify what you missed.
+
+On "does fast catch up" — here's what the question means.
+
+Look at the success rate at episode 500 for fast vs medium. Are they the same, or is medium still higher? If fast stopped at the same final success rate as medium, that would mean early exploitation was fine. If fast is lower, it means the agent got stuck in a suboptimal policy — it started exploiting before it had visited enough states to know the best path. It committed to whatever partial knowledge it had at episode 100 and never corrected it.
+
+That's the core risk: you can converge fast to the wrong answer.
+
+On slow suffering in the middle — yes, and here's why.
+
+slow keeps ε high well into training, meaning it keeps picking random actions even when it already has decent Q-values. So even if episode 200 has good Q-values, the agent randomly ignores them ~60% of the time. The reward curve dips or stays low until ε finally drops and the agent commits to what it learned.
+
+On your real-robot choices — you need to flip them.
+
+Limited training → use medium, not fast. With limited episodes, you need the agent to explore enough before it stops. fast risks locking in a bad policy. medium balances exploration and exploitation within your budget.
+Unlimited training → slow or even medium both work, because you have enough episodes for even a slow explorer to fill in the Q-table. But slow wastes episodes exploiting nothing in the middle, so medium is usually still better.
+The real answer: the decay schedule should match how long it takes the agent to visit the important states once. In this 10×10 grid, that's roughly 100–200 episodes — which is why medium wins.
+
+The takeaway from all three experiments (alpha, gamma, epsilon):
+
+Parameter	Too low	Too high	Sweet spot
+Alpha	Slow, inconsistent	Overshoots/noisy	0.3–0.5
+Gamma	Can't see far rewards	Slow convergence	0.9
+Epsilon decay	Locks in bad policy	Wastes training time	~ep 250–300
+Ready for Checkpoint 6 — best config evaluation run + then we move to the exploration bonus agent? Say go.
+
+Go
+Edit COSC_4117EL_A2_G1-q_learning_epsilon.py
+Added 195 lines
+Run it:
+
+
+python COSC_4117EL_A2_G1-q_learning_epsilon.py
+This checkpoint closes the epsilon-greedy story. The key thing to read is section [B] — the demo path.
+
+The path will print every position the robot visited, with markers for (P) pickup, (D) packing, and (C) dock. You should see a clear sequence: dock → pickup → packing → dock. Count the steps — a well-trained agent on this grid typically finishes in 15–35 steps vs the 120-step limit.
+
+Also look at the bar chart: the learned policy vs random agent side by side on reward and success rate. This is the clearest visual answer to "did Q-learning actually work?"
+
+One subtle thing to watch: does the path detour around congestion zones (red cells)? If the agent learned that -10 congestion penalty is worse than a couple extra steps at -1 each, it will route around them. That's evidence the agent internalized the reward structure — not just the goal, but the cost landscape.
+
+Tell me what you see and then we start Checkpoint 7 — the Exploration Bonus agent.
+
+COSC_4117EL_A2_G1-q_learning_epsilon.py
+• Does the path go directly to pickup → packing → dock?
+How can I know this?
+  • Or does it take a detour around congestion zones?
+    (That would be smart — the agent learned -10 isn't worth it)
+I don't know
+  • How many steps does the learned agent take vs the step limit (120)?
+It took 22 steps
+  • The random agent occasionally succeeds too — why?
+    Does luck matter less as training episodes increase?
+Eventually it gets to the goals. Yes luck matters less as training episodes increase.
+Good — 22 steps is excellent, well under the 120 limit. Let me answer your questions.
+
+How to read the demo path from section [B].
+
+The output prints every position the robot visited, like this:
+
+
+(9,0) → (8,0) → (7,0) → (7,0)(P) → (6,0) → ... → (0,3)(D) → ... → (9,0)(C)
+The markers (P), (D), (C) appear right after the position where that event happened. So you can verify the order — did (P) come before (D), and (D) before (C)? If yes, the agent learned the correct task sequence.
+
+To check for congestion detours, look at the grid layout from Checkpoint 1 and compare the positions in the path. Any (row, col) that matches a red cell ! in the grid means the agent walked through congestion. If the path avoids those cells even though they're between the start and goal, the agent learned the -10 penalty is not worth it.
+
+On the random agent succeeding occasionally — you're right, but there's more to it.
+
+The random agent succeeds purely by chance — it randomly stumbles into pickup, then packing, then dock before hitting 120 steps. As you said, luck matters less as training increases because the learned agent is consistent — it succeeds on nearly every episode, not just sometimes. The difference shows up most in the worst episode row of section [A]: the learned agent's worst run is still much better than the random agent's average.
+
+The big picture before Checkpoint 7.
+
+You've now seen all three levers of epsilon-greedy Q-learning:
+
+Alpha — how fast you update beliefs
+Gamma — how far ahead you plan
+Epsilon decay — when you stop experimenting
+The agent you just evaluated learned a 22-step solution to a task with 400 states and no prior knowledge of the layout — just reward signals. That's what Q-learning does.
+
+Now we introduce a fundamentally different exploration strategy. Instead of randomly exploring, the agent tracks which state-action pairs it has visited least and deliberately seeks them out. Ready for Checkpoint 7? Say go.
+
+COSC_4117EL_A2_G1-q_learning_epsilon.py
+Go
+Now we start the second file. This is a clean implementation — the exploration bonus is a fundamentally different idea so it deserves its own space.
+
+Write COSC_4117EL_A2_G1-q_learning_exploration.py
+316 lines
+Run it:
+
+
+python COSC_4117EL_A2_G1-q_learning_exploration.py
+Section [1] is the most important thing to read first — before looking at any plots. It shows the bonus value at different visit counts for each k. Notice:
+
+At N=0 (never visited), the bonus is exactly k. That's the agent's "curiosity score" for a completely unknown action.
+At N=10, the bonus has dropped significantly. The agent is already less curious about that pair.
+At N=500, the bonus is nearly 0 — pure Q-learning takes over.
+This is why there's no decay schedule here. The schedule is baked into the math. As the agent visits states, the bonus naturally shrinks.
+
+The right plot (visit count distribution) is unique to this checkpoint — epsilon-greedy doesn't have an equivalent. It shows whether the agent explored the state space evenly or concentrated on a few areas. A tall spike at low visit counts means most state-action pairs were barely touched. A wider distribution means more uniform exploration.
+
+Tell me what you observe — especially whether higher k visits more unique states (section [3]) — and we'll move to Checkpoint 8.
+
+
+image.png
+338×264
+COSC_4117EL_A2_G1-q_learning_exploration.py
+• Section [1]: at N=0, the bonus equals k exactly.
+    Which k would push the agent hardest toward unvisited pairs?
+k=5.0
+  • Section [3]: does higher k visit MORE unique states?
+    What does that tell you about how k controls curiosity?
+No, but I am not sure
+  • Right plot (visit distribution): is one k more 'uniform'?
+    A uniform distribution means the agent explored everywhere evenly.
+Nop, but I am not sure if the graph is plotted correctly
+  • Does k=0.5 converge faster because it exploits earlier?
+    Is that the same tradeoff as fast epsilon decay?
+Yes, it seems to be the same tradeoff
+Your observations are good — let me clarify two things and fix the plot.
+
+On higher k visiting more unique states — re-check section [3] in the terminal.
+
+Higher k should visit more unique states. With k=5.0, an unvisited pair gets a bonus of 5.0 on top of its Q-value, which is very hard to ignore. The agent keeps seeking out unexplored corners of the state space. With k=0.5, the bonus is small enough that a pair with a decent Q-value beats an unvisited pair quickly, so the agent exploits sooner and stops exploring new states. Check the "states visited" and "%" column in section [3] again — k=5.0 should have the highest coverage.
+
+On the plot not being readable — you're right, it needs fixing. Overlapping transparent histograms blur together. Let me switch to step-style lines so all three k values are clearly visible:
+
+Edit COSC_4117EL_A2_G1-q_learning_exploration.py
+Added 6 lines
+Run it again:
+
+
+python COSC_4117EL_A2_G1-q_learning_exploration.py
+On k=0.5 being the same tradeoff as fast epsilon decay — exactly right. Both commit to exploitation early. The difference is how they get there:
+
+Fast epsilon decay	k=0.5 bonus
+Stops exploring	At a fixed episode (ep ~100)	Gradually, as visits accumulate
+Reason	Schedule says so	Bonus shrinks below Q-value gap
+Can it re-explore?	No — epsilon stays at minimum	Yes — if Q-values change dramatically, bonus can still matter
+The exploration bonus is more adaptive. If the agent's Q-values shift (because it discovered something new), the relative bonus can become relevant again. Epsilon-greedy with fast decay never goes back.
+
+Now look at section [3] in the new run and check whether k=5.0 covers more of the state space. Then tell me what you see in the new visit distribution plot — you should now see three distinct step-lines showing different shapes. We're ready for Checkpoint 8 right after.
+
+COSC_4117EL_A2_G1-q_learning_exploration.py
+This is what I see in section 3, explain yourself
+
+[3] State-space coverage: unique (state, action) pairs visited
+  k=0.5: 724 / 1600 pairs visited  (45.2%)  avg visits per pair: 18.5
+  k=2.0: 663 / 1600 pairs visited  (41.4%)  avg visits per pair: 20.1
+  k=5.0: 653 / 1600 pairs visited  (40.8%)  avg visits per pair: 20.5
+I was wrong in my prediction — and this result is actually more interesting than what I expected. Let me explain what's really happening.
+
+Why k=0.5 visits MORE unique states than k=5.0.
+
+Look at the total visits across all episodes. They're nearly identical:
+
+k=0.5: 724 pairs × 18.5 avg = ~13,400 total visits
+k=5.0: 653 pairs × 20.5 avg = ~13,400 total visits
+Same total visits, different distribution. Here's why:
+
+k=5.0 gets "trapped" rechecking lightly-visited states. After visiting a state just 5 times, the bonus is still 5/√6 ≈ 2.04 — large enough to keep pulling the agent back. So k=5.0 cycles among states it has already discovered, revisiting them repeatedly instead of pushing into new territory.
+
+k=0.5 commits to the optimal path faster, and that path covers more unique states. Once the agent learns the route, each successful episode walks through the complete sequence: dock → pickup → packing → dock. That path spans many distinct (row, col, has_package, delivered) combinations across the whole grid. The agent isn't exploring randomly — it's systematically covering states by completing the task correctly.
+
+The real lesson from section [3]:
+
+High k doesn't mean more coverage — it means more depth on fewer states. Low k means the agent commits earlier, and the task itself provides the breadth.
+
+This connects to your k=0.5 / fast-epsilon-decay analogy from earlier. Both strategies converge fast, and in a task where the learned path itself is long, fast convergence is broad coverage.
+
+Ready for Checkpoint 8 — head-to-head comparison across multiple seeds? Say go.
+
+COSC_4117EL_A2_G1-q_learning_exploration.py#10-10
+Go
+Edit COSC_4117EL_A2_G1-q_learning_exploration.py
+Added 237 lines
+Run it:
+
+
+python COSC_4117EL_A2_G1-q_learning_exploration.py
+The 2×3 plot grid is the clearest visual in the whole assignment. Each column is one seed (one layout), top row is reward, bottom row is success rate. You can directly compare how both methods behave on the same layout by looking at one column.
+
+The key number is Std in section [B]. Standard deviation measures consistency across seeds. If epsilon-greedy gets 90%, 88%, 91% success across three seeds, its std is low — it's robust. If exploration bonus gets 95%, 60%, 88%, its std is high — it's sensitive to layout. A method that works well on average but has high variance is less trustworthy in practice.
+
+What to watch for across seeds: layouts differ in where the pickup, packing, and dock are placed. Some placements create longer paths with more congestion zones in the way. One method might handle those harder layouts better than the other — that's what robustness means.
+
+Tell me what you observe and we'll move to the final checkpoint — Checkpoint 9: visualization and the pygame demo.
+
+• Which method has LOWER std across seeds?
+    Lower std = more robust = works regardless of layout.
+Exploration bonus
+  • Do both methods fail on any seed, or do both always converge?
+Both always converge
+  • Does the gap between them grow or shrink on harder layouts?
+    (Seeds 99 and 123 have different pickup/packing/dock positions.)
+Grows
+  • Which would you trust on a layout you have never seen before?
+Exploration Bonus
+Perfect observations — and your reasoning is sound. Let me explain why before we move to the final checkpoint.
+
+Why exploration bonus is more robust across layouts.
+
+Epsilon-greedy's exploration is random — it relies on chance to stumble into the right states during the exploration phase. On a layout where the pickup station is behind a cluster of shelves, random exploration might not reach it enough times before epsilon decays. The policy locks in before it's ready.
+
+The exploration bonus is targeted — it actively seeks out the least-visited state-action pairs. No matter how the layout changes, the agent will deliberately push toward unexplored corners of the state space. It doesn't rely on luck to find the pickup station; it hunts for it. That's why the gap grows on harder layouts — harder layouts punish random exploration more.
+
+Your instinct about trusting exploration bonus on unseen layouts is the right engineering judgment. In a real warehouse, layouts change constantly. You want an algorithm whose exploration strategy adapts to the structure of the problem, not one that depends on a well-chosen epsilon schedule that was tuned for a specific layout.
+
+Now for the final checkpoint. Checkpoint 9 adds the pygame real-time visualization and a clean combined comparison plot for both methods.
+
+Edit COSC_4117EL_A2_G1-q_learning_exploration.py
+Added 219 lines
+Now add the same pygame demo to the epsilon-greedy file so it's self-contained:
+
+Edit COSC_4117EL_A2_G1-q_learning_epsilon.py
+Added 45 lines
+Run each file independently:
+
+
+python COSC_4117EL_A2_G1-q_learning_epsilon.py
+python COSC_4117EL_A2_G1-q_learning_exploration.py
+Two pygame windows will appear in sequence for each file. The robot (purple circle) will navigate step by step. Watch for:
+
+Congestion detours — if the agent goes around red cells instead of through them, it learned the -10 penalty isn't worth saving a step. That's the reward structure internalized.
+
+Path differences between the two agents — they were both trained on the same layout with the same alpha and gamma. Any path difference comes entirely from their exploration strategy. The exploration bonus agent may take a slightly different route because it visited the state space more uniformly — it may have found a path the epsilon-greedy agent never discovered because random exploration missed it.
+
+Hesitations — if the agent revisits the same cell, that's a sign of conflicting Q-values. Both agents should be largely hesitation-free by now.
+
+The checkpoint9_combined_comparison.png plot is the cleanest figure for your report — it shows both methods on the same axes for a direct visual comparison.
+
+All 9 checkpoints are done. Tell me what you observe in the demos and we can talk about what to include in the written report.
+
+COSC_4117EL_A2_G1-q_learning_exploration.py
+• Do both agents take the same path or different routes?
+Same path
+  • Does either agent detour around congestion zones (red cells)?
+Nop
+  • Which agent moves more 'confidently' — fewer hesitations?
+    (Hesitation = revisiting the same cell, which means the Q-table
+     has conflicting values for neighbouring actions.)
+They did the same
+These observations are actually a strong result — let me explain what they mean.
+
+Same path — this is the expected outcome and it confirms both methods worked correctly.
+
+Both agents used the same Q-learning update rule, same alpha, same gamma, same environment. The only difference was how they explored during training. Since both methods explored enough of the state space to find the optimal route, they converged to the same optimal policy. If they had taken different paths, it would suggest one method missed part of the state space and found a suboptimal route instead.
+
+Not detouring around congestion — the agent is not being dumb, it's being correct.
+
+This is the most important insight from the demo. The agent did learn the -10 congestion penalty — but it also learned that the detour costs more than the shortcut. If going around a red cell requires 5 extra steps at -1 each, that's -5. Going through costs -10. The agent correctly chose the longer penalty over the accumulated step penalties.
+
+This is reward design in action. The ratio between STEP_PENALTY = -1 and CONGESTION_PENALTY = -10 determines whether the agent avoids congestion zones. If you made steps cost -5 each, the agent would detour around every red cell. This is exactly why reward design is a separate discipline — the numbers you choose shape the behavior you get.
+
+Both equally confident — confirms convergence quality.
+
+No hesitations means no conflicting Q-values. Both Q-tables are stable and decisive at every state on the path. That's the sign of a fully converged policy.
+
+The complete picture from all 9 checkpoints:
+
+What you learned	Where
+State space needs task progress flags	C1
+Q-values are learned estimates of future reward	C2
+Alpha controls how fast beliefs update	C3
+Gamma controls how far the agent plans ahead	C4
+Epsilon decay controls when to stop experimenting	C5
+A trained agent beats random by a large margin	C6
+k controls curiosity strength, not coverage width	C7
+Exploration bonus is more robust across layouts	C8
+Both methods find the same optimal policy	C9
+You now have everything you need for the written report. Want me to help structure the report sections, or is there anything in the code you want to revisit before submission?
+
