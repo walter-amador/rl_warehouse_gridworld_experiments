@@ -306,6 +306,153 @@ def checkpoint_2_training_loop():
     return q_table, rewards, successes
 
 
+
+# ── CHECKPOINT 3: Alpha Experiments (Learning Rate) ──────────────────────────
+#
+# Question: How does the learning rate change what the agent learns?
+#
+# Alpha controls how aggressively the agent updates its Q-values each step:
+#   Q[s,a] += alpha * TD_error
+#
+#   Low alpha  (0.1) → small steps, learns slowly, more stable but slower convergence
+#   Mid alpha  (0.3) → baseline from Checkpoint 2
+#   High alpha (0.5) → larger steps, learns faster but can overshoot/oscillate
+#   Very high  (0.7) → very aggressive updates, can become unstable
+#
+# Everything else is held FIXED so alpha is the only variable.
+# Fixed: gamma=0.95, epsilon decay=standard, episodes=500, seed=42
+
+ALPHAS_TO_TEST = [0.1, 0.3, 0.5, 0.7]
+SMOOTHING_WINDOW = 20   # episodes to average for smoother plots
+
+
+def find_convergence_episode(rewards: list[float], threshold: float = -20.0, window: int = 30) -> int:
+    """
+    Returns the first episode where the rolling average reward stays above
+    a threshold, as a rough convergence point.
+    Returns -1 if never converged.
+    """
+    for i in range(window, len(rewards)):
+        if np.mean(rewards[i - window:i]) >= threshold:
+            return i
+    return -1
+
+
+def checkpoint_3_alpha_experiments():
+    """
+    Train with 4 different alphas, everything else fixed.
+    Compare: convergence speed, final reward, stability of learning curve.
+    """
+    print("\n" + "=" * 60)
+    print("CHECKPOINT 3 — Alpha (Learning Rate) Experiments")
+    print(f"  alphas={ALPHAS_TO_TEST}  gamma={GAMMA}  episodes={NUM_EPISODES}")
+    print("=" * 60)
+
+    results = {}
+
+    for alpha in ALPHAS_TO_TEST:
+        world = WarehouseGridWorld(seed=SEED)
+        print(f"\n  Training alpha={alpha} ...")
+        q_table, rewards, successes = train_epsilon_greedy(
+            world, alpha=alpha, gamma=GAMMA,
+            num_episodes=NUM_EPISODES, verbose=False,
+        )
+        results[alpha] = {
+            "q_table":   q_table,
+            "rewards":   rewards,
+            "successes": successes,
+        }
+
+    # ── Summary table ─────────────────────────────────────────────────────────
+    print("\n[A] Results summary")
+    print(f"  {'Alpha':>6} | {'Avg reward (all)':>18} | {'Avg reward (last 100)':>22} | "
+          f"{'Success rate (last 100)':>24} | {'Converges ~ep':>14}")
+    print("  " + "-" * 95)
+    for alpha in ALPHAS_TO_TEST:
+        r  = results[alpha]["rewards"]
+        s  = results[alpha]["successes"]
+        cv = find_convergence_episode(r)
+        print(
+            f"  {alpha:>6.1f} | {np.mean(r):>18.1f} | {np.mean(r[-100:]):>22.1f} | "
+            f"{np.mean(s[-100:])*100:>23.1f}% | "
+            f"{'~ep ' + str(cv) if cv != -1 else 'never':>14}"
+        )
+
+    # ── Progression per alpha ─────────────────────────────────────────────────
+    print("\n[B] Reward progression across training windows")
+    windows = [(0, 50), (100, 150), (250, 300), (450, 500)]
+    header = f"  {'Window':>12} | " + " | ".join(f"α={a:<4}" for a in ALPHAS_TO_TEST)
+    print(header)
+    print("  " + "-" * (len(header) - 2))
+    for start, end in windows:
+        row = f"  ep {start+1:>3}–{end:>3}  | "
+        row += " | ".join(
+            f"{np.mean(results[a]['rewards'][start:end]):>7.1f}" for a in ALPHAS_TO_TEST
+        )
+        print(row)
+
+    # ── Plot ──────────────────────────────────────────────────────────────────
+    try:
+        import matplotlib.pyplot as plt
+        import matplotlib
+
+        matplotlib.rcParams.update({"font.size": 11})
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5))
+        fig.suptitle(f"Checkpoint 3 — Alpha Experiments  (seed={SEED}, γ={GAMMA})", fontsize=13)
+
+        colors = ["#e74c3c", "#2980b9", "#27ae60", "#f39c12"]
+
+        for alpha, color in zip(ALPHAS_TO_TEST, colors):
+            r = results[alpha]["rewards"]
+            # Rolling average for smoother curves
+            smoothed = np.convolve(r, np.ones(SMOOTHING_WINDOW) / SMOOTHING_WINDOW, mode="valid")
+            episodes = range(SMOOTHING_WINDOW, NUM_EPISODES + 1)
+
+            ax1.plot(episodes, smoothed, label=f"α={alpha}", color=color, linewidth=1.8)
+
+        ax1.set_xlabel("Episode")
+        ax1.set_ylabel(f"Cumulative reward (rolling avg {SMOOTHING_WINDOW}ep)")
+        ax1.set_title("Cumulative Reward vs Episode")
+        ax1.legend()
+        ax1.grid(True, alpha=0.3)
+        ax1.axhline(0, color="black", linewidth=0.7, linestyle="--")
+
+        # Success rate over training (rolling window)
+        for alpha, color in zip(ALPHAS_TO_TEST, colors):
+            s = np.array(results[alpha]["successes"], dtype=float)
+            smoothed_s = np.convolve(s, np.ones(SMOOTHING_WINDOW) / SMOOTHING_WINDOW, mode="valid")
+            episodes = range(SMOOTHING_WINDOW, NUM_EPISODES + 1)
+            ax2.plot(episodes, smoothed_s * 100, label=f"α={alpha}", color=color, linewidth=1.8)
+
+        ax2.set_xlabel("Episode")
+        ax2.set_ylabel(f"Success rate % (rolling avg {SMOOTHING_WINDOW}ep)")
+        ax2.set_title("Task Success Rate vs Episode")
+        ax2.legend()
+        ax2.grid(True, alpha=0.3)
+        ax2.set_ylim(-5, 105)
+
+        plt.tight_layout()
+        plt.savefig("checkpoint3_alpha_experiments.png", dpi=120, bbox_inches="tight")
+        print("\n[C] Plot saved → checkpoint3_alpha_experiments.png")
+        plt.show()
+
+    except ImportError:
+        print("\n[C] matplotlib not found — skipping plot (pip install matplotlib)")
+
+    print("\n" + "=" * 60)
+    print("CHECKPOINT 3 COMPLETE")
+    print("Look at the plots and think about:")
+    print("  • Which alpha converges fastest (reaches high success rate earliest)?")
+    print("  • Which alpha has the smoothest reward curve vs the noisiest?")
+    print("  • Does high alpha (0.7) ever hurt the agent — does the curve dip?")
+    print("  • At α=0.1, is the agent still improving at episode 500,")
+    print("    or has it leveled off?  What does that tell you about step size?")
+    print("=" * 60)
+
+    return results
+
+
 if __name__ == "__main__":
     checkpoint_1_state_space()
     checkpoint_2_training_loop()
+    checkpoint_3_alpha_experiments()
