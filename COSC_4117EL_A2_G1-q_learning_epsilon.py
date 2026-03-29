@@ -452,7 +452,176 @@ def checkpoint_3_alpha_experiments():
     return results
 
 
+
+# ── CHECKPOINT 4: Gamma Experiments (Discount Factor) ────────────────────────
+#
+# Question: How much should the agent care about future rewards?
+#
+# Gamma is the discount factor applied to future Q-values in the update:
+#   TD target = reward + gamma * max(Q[s', :])
+#
+# Intuitively:
+#   gamma=0.7  → future rewards are worth 70% of what immediate ones are
+#               after 10 steps, a reward is worth only 0.7^10 ≈ 2.8% of its value
+#   gamma=0.9  → moderate foresight, a common default
+#   gamma=0.99 → the agent nearly fully values rewards 20+ steps away
+#
+# WHY THIS MATTERS FOR THIS TASK:
+#   The biggest rewards are DELAYED:
+#     pickup  (+25) happens after navigating to the pickup station
+#     delivery(+40) happens after navigating to the packing station
+#     dock   (+100) happens only after BOTH are done
+#   A short-sighted agent (low gamma) may not "see" the dock reward at all
+#   from states that are many steps away — so it won't learn to return.
+#
+# Fixed: alpha=0.5 (smooth + fast from Checkpoint 3), same epsilon decay, seed=42
+
+BEST_ALPHA    = 0.5       # best from Checkpoint 3
+GAMMAS_TO_TEST = [0.7, 0.9, 0.99]
+
+
+def checkpoint_4_gamma_experiments():
+    """
+    Train with 3 different gammas, everything else fixed.
+    Compare: whether the agent learns the full task, how it values the dock return.
+    """
+    print("\n" + "=" * 60)
+    print("CHECKPOINT 4 — Gamma (Discount Factor) Experiments")
+    print(f"  gammas={GAMMAS_TO_TEST}  alpha={BEST_ALPHA}  episodes={NUM_EPISODES}")
+    print("=" * 60)
+
+    results = {}
+
+    for gamma in GAMMAS_TO_TEST:
+        world = WarehouseGridWorld(seed=SEED)
+        print(f"\n  Training gamma={gamma} ...")
+        q_table, rewards, successes = train_epsilon_greedy(
+            world, alpha=BEST_ALPHA, gamma=gamma,
+            num_episodes=NUM_EPISODES, verbose=False,
+        )
+        results[gamma] = {
+            "q_table":   q_table,
+            "rewards":   rewards,
+            "successes": successes,
+            "world":     world,
+        }
+
+    # ── Summary table ─────────────────────────────────────────────────────────
+    print("\n[A] Results summary")
+    print(f"  {'Gamma':>6} | {'Avg reward (all)':>18} | {'Avg reward (last 100)':>22} | "
+          f"{'Success rate (last 100)':>24} | {'Converges ~ep':>14}")
+    print("  " + "-" * 95)
+    for gamma in GAMMAS_TO_TEST:
+        r  = results[gamma]["rewards"]
+        s  = results[gamma]["successes"]
+        cv = find_convergence_episode(r)
+        print(
+            f"  {gamma:>6.2f} | {np.mean(r):>18.1f} | {np.mean(r[-100:]):>22.1f} | "
+            f"{np.mean(s[-100:])*100:>23.1f}% | "
+            f"{'~ep ' + str(cv) if cv != -1 else 'never':>14}"
+        )
+
+    # ── Key insight: how far does the agent "see" the dock reward? ────────────
+    print("\n[B] How much is the dock reward (+100) worth from N steps away?")
+    print(f"    (discounted value = gamma^N * 100)")
+    print(f"  {'Steps away':>12} | " + " | ".join(f"γ={g}" for g in GAMMAS_TO_TEST))
+    print("  " + "-" * 50)
+    for steps in [5, 10, 15, 20, 30]:
+        row = f"  {steps:>10} s | "
+        row += " | ".join(f"{(g ** steps) * 100:>7.2f}" for g in GAMMAS_TO_TEST)
+        print(row)
+    print("    → A short-sighted agent can't 'see' the dock reward from far away.")
+
+    # ── Q-value at dock state for each gamma ─────────────────────────────────
+    print("\n[C] Q-values at the dock state after delivery")
+    print("    State = (dock_row, dock_col, has_package=0, delivered=1)")
+    print("    This state immediately precedes the terminal reward (+100).")
+    print("    Higher Q-values here = agent more strongly attracted to dock.\n")
+    for gamma in GAMMAS_TO_TEST:
+        world = results[gamma]["world"]
+        dock_r, dock_c = world.dock_pos
+        dock_state = (dock_r, dock_c, 0, 1)
+        dock_idx   = world.state_to_index(dock_state)
+        q_row      = results[gamma]["q_table"][dock_idx]
+        best_a     = ACTIONS[int(np.argmax(q_row))]
+        print(f"    γ={gamma}: Q-values={np.round(q_row, 1)}  best='{best_a}'")
+
+    # ── Progression per gamma ─────────────────────────────────────────────────
+    print("\n[D] Reward progression across training windows")
+    windows = [(0, 50), (100, 150), (250, 300), (450, 500)]
+    header = f"  {'Window':>12} | " + " | ".join(f"γ={g:<5}" for g in GAMMAS_TO_TEST)
+    print(header)
+    print("  " + "-" * (len(header) - 2))
+    for start, end in windows:
+        row = f"  ep {start+1:>3}–{end:>3}  | "
+        row += " | ".join(
+            f"{np.mean(results[g]['rewards'][start:end]):>8.1f}" for g in GAMMAS_TO_TEST
+        )
+        print(row)
+
+    # ── Plot ──────────────────────────────────────────────────────────────────
+    try:
+        import matplotlib.pyplot as plt
+        import matplotlib
+
+        matplotlib.rcParams.update({"font.size": 11})
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5))
+        fig.suptitle(
+            f"Checkpoint 4 — Gamma Experiments  (seed={SEED}, α={BEST_ALPHA})",
+            fontsize=13,
+        )
+
+        colors = ["#e74c3c", "#2980b9", "#27ae60"]
+
+        for gamma, color in zip(GAMMAS_TO_TEST, colors):
+            r = results[gamma]["rewards"]
+            smoothed = np.convolve(r, np.ones(SMOOTHING_WINDOW) / SMOOTHING_WINDOW, mode="valid")
+            episodes = range(SMOOTHING_WINDOW, NUM_EPISODES + 1)
+            ax1.plot(episodes, smoothed, label=f"γ={gamma}", color=color, linewidth=1.8)
+
+        ax1.set_xlabel("Episode")
+        ax1.set_ylabel(f"Cumulative reward (rolling avg {SMOOTHING_WINDOW}ep)")
+        ax1.set_title("Cumulative Reward vs Episode")
+        ax1.legend()
+        ax1.grid(True, alpha=0.3)
+        ax1.axhline(0, color="black", linewidth=0.7, linestyle="--")
+
+        for gamma, color in zip(GAMMAS_TO_TEST, colors):
+            s = np.array(results[gamma]["successes"], dtype=float)
+            smoothed_s = np.convolve(s, np.ones(SMOOTHING_WINDOW) / SMOOTHING_WINDOW, mode="valid")
+            episodes = range(SMOOTHING_WINDOW, NUM_EPISODES + 1)
+            ax2.plot(episodes, smoothed_s * 100, label=f"γ={gamma}", color=color, linewidth=1.8)
+
+        ax2.set_xlabel("Episode")
+        ax2.set_ylabel(f"Success rate % (rolling avg {SMOOTHING_WINDOW}ep)")
+        ax2.set_title("Task Success Rate vs Episode")
+        ax2.legend()
+        ax2.grid(True, alpha=0.3)
+        ax2.set_ylim(-5, 105)
+
+        plt.tight_layout()
+        plt.savefig("checkpoint4_gamma_experiments.png", dpi=120, bbox_inches="tight")
+        print("\n[E] Plot saved → checkpoint4_gamma_experiments.png")
+        plt.show()
+
+    except ImportError:
+        print("\n[E] matplotlib not found — skipping plot")
+
+    print("\n" + "=" * 60)
+    print("CHECKPOINT 4 COMPLETE")
+    print("Look at the plots and think about:")
+    print("  • Does γ=0.7 ever achieve consistent success? Why or why not?")
+    print("  • Look at section [B]: from 20 steps away, how much of the +100")
+    print("    dock reward does each agent 'see'? Does that match the success rate?")
+    print("  • γ=0.99 values far-future rewards almost fully — does it converge")
+    print("    faster or slower than γ=0.9? What does that tell you?")
+    print("=" * 60)
+
+    return results
+
+
 if __name__ == "__main__":
     checkpoint_1_state_space()
     checkpoint_2_training_loop()
     checkpoint_3_alpha_experiments()
+    checkpoint_4_gamma_experiments()
