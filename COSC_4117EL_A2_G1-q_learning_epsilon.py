@@ -1045,10 +1045,55 @@ def checkpoint_6_best_config_evaluation():
     return q_table, eval_rewards, eval_successes
 
 
+
+def run_pygame_demo_epsilon(q_table: np.ndarray, seed: int, step_delay_ms: int = 250) -> None:
+    """Animate one evaluation episode for the epsilon-greedy agent."""
+    try:
+        import pygame
+        from warehouse_gridworld_domain_random import setup_pygame, draw_grid
+    except ImportError:
+        print("  pygame not available — skipping live demo")
+        return
+
+    world  = WarehouseGridWorld(seed=seed)
+    screen, clock, font, small_font = setup_pygame()
+    pygame.display.set_caption(f"Epsilon-Greedy Agent (α={BEST_ALPHA}, γ={BEST_GAMMA})")
+
+    state_idx = world.state_to_index(world.reset())
+    done = running = True
+
+    draw_grid(world, screen, font, small_font)
+    pygame.display.flip()
+    pygame.time.wait(600)
+    done = False
+
+    while running and not done:
+        for event in pygame.event.get():
+            if event.type in (pygame.QUIT, pygame.KEYDOWN):
+                running = False
+        if running:
+            action_idx = int(np.argmax(q_table[state_idx]))
+            result     = world.step(ACTIONS[action_idx])
+            state_idx  = world.state_to_index(result.state)
+            done       = result.done
+            draw_grid(world, screen, font, small_font)
+            pygame.display.flip()
+            clock.tick(1000 // step_delay_ms)
+
+    if running:
+        pygame.time.wait(2000)
+    pygame.quit()
+    status = "SUCCESS" if (world.delivered and world.robot_pos == world.dock_pos) else "TIMEOUT"
+    print(f"  Epsilon-greedy demo — {status} in {world.steps} steps, score={world.score:.0f}")
+
+
 if __name__ == "__main__":
     checkpoint_1_state_space()
     checkpoint_2_training_loop()
     checkpoint_3_alpha_experiments()
     checkpoint_4_gamma_experiments()
     checkpoint_5_epsilon_decay()
-    checkpoint_6_best_config_evaluation()
+    q_table, _, _ = checkpoint_6_best_config_evaluation()
+    print("\nLaunching Epsilon-Greedy pygame demo ...")
+    print("Close the window or press any key to exit.")
+    run_pygame_demo_epsilon(q_table, seed=SEED)
