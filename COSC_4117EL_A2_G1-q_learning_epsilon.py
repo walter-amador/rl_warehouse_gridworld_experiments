@@ -851,9 +851,204 @@ def checkpoint_5_epsilon_decay():
     return results
 
 
+
+# ── CHECKPOINT 6: Best Config — Evaluation Run ───────────────────────────────
+#
+# We now use the best hyperparameters found across Checkpoints 3–5:
+#   alpha = 0.5   (fast + smooth convergence)
+#   gamma = 0.9   (good foresight, reliable convergence)
+#   decay = medium (explores ~300 eps before committing)
+#
+# An evaluation run is DIFFERENT from training:
+#   - epsilon = 0.0  (pure exploitation, no random actions)
+#   - Q-table is frozen (no updates)
+#   - We just watch what the learned policy does
+#
+# We also run a random agent as a baseline so you can see the contrast.
+
+EVAL_EPISODES = 100   # evaluate over many episodes to get a reliable success rate
+
+
+def run_evaluation(world: WarehouseGridWorld, q_table: np.ndarray) -> tuple[float, bool, list]:
+    """
+    Run one episode with pure greedy policy (epsilon=0).
+    Returns (total_reward, success, path).
+    """
+    state     = world.reset()
+    state_idx = world.state_to_index(state)
+    total_reward = 0.0
+    path = [world.robot_pos]
+    done = False
+
+    while not done:
+        action_idx = int(np.argmax(q_table[state_idx]))   # always best action
+        action     = ACTIONS[action_idx]
+        result     = world.step(action)
+        total_reward  += result.reward
+        state_idx      = world.state_to_index(result.state)
+        done           = result.done
+        path.append(world.robot_pos)
+
+    success = world.delivered and (world.robot_pos == world.dock_pos)
+    return total_reward, success, path
+
+
+def run_random_baseline(world: WarehouseGridWorld) -> tuple[float, bool]:
+    """Run one episode with a purely random policy."""
+    world.reset()
+    total_reward = 0.0
+    done = False
+    while not done:
+        result = world.step(world.random_action())
+        total_reward += result.reward
+        done = result.done
+    success = world.delivered and (world.robot_pos == world.dock_pos)
+    return total_reward, success
+
+
+def checkpoint_6_best_config_evaluation():
+    """
+    Train with the best config, then evaluate cleanly.
+    Compare learned policy vs random agent.
+    """
+    print("\n" + "=" * 60)
+    print("CHECKPOINT 6 — Best Config + Evaluation Run")
+    print(f"  alpha={BEST_ALPHA}  gamma={BEST_GAMMA}  decay=medium  episodes={NUM_EPISODES}")
+    print("=" * 60)
+
+    # ── Train with best config ────────────────────────────────────────────────
+    world = WarehouseGridWorld(seed=SEED)
+    print(f"\nLayout: Pickup={world.pickup_pos}  Packing={world.packing_pos}  Dock={world.dock_pos}")
+    print(f"\nTraining best config ...")
+    q_table, train_rewards, train_successes, _ = train_epsilon_greedy_scheduled(
+        world, BEST_ALPHA, BEST_GAMMA, NUM_EPISODES,
+        decay_episode=DECAY_SCHEDULES["medium"],
+    )
+    print(f"  Training success rate (last 100): {np.mean(train_successes[-100:])*100:.1f}%")
+
+    # ── Evaluate learned policy ───────────────────────────────────────────────
+    print(f"\nEvaluating learned policy over {EVAL_EPISODES} episodes (ε=0, no learning) ...")
+    eval_rewards  = []
+    eval_successes = []
+    eval_steps    = []
+    demo_path     = None
+
+    for ep in range(EVAL_EPISODES):
+        reward, success, path = run_evaluation(world, q_table)
+        eval_rewards.append(reward)
+        eval_successes.append(success)
+        eval_steps.append(world.steps)
+        if ep == 0:
+            demo_path = path   # save first episode path for display
+
+    # ── Random baseline ───────────────────────────────────────────────────────
+    print(f"Running random baseline over {EVAL_EPISODES} episodes ...")
+    rand_rewards   = []
+    rand_successes = []
+    rand_steps     = []
+
+    for _ in range(EVAL_EPISODES):
+        reward, success = run_random_baseline(world)
+        rand_rewards.append(reward)
+        rand_successes.append(success)
+        rand_steps.append(world.steps)
+
+    # ── Comparison table ──────────────────────────────────────────────────────
+    print("\n[A] Learned policy vs random agent")
+    print(f"  {'Metric':<30} {'Learned policy':>16} {'Random agent':>14}")
+    print("  " + "-" * 62)
+    metrics = [
+        ("Avg reward",         f"{np.mean(eval_rewards):>14.1f}",  f"{np.mean(rand_rewards):>12.1f}"),
+        ("Avg steps to finish", f"{np.mean(eval_steps):>14.1f}",   f"{np.mean(rand_steps):>12.1f}"),
+        ("Success rate",        f"{np.mean(eval_successes)*100:>13.1f}%", f"{np.mean(rand_successes)*100:>11.1f}%"),
+        ("Best episode reward", f"{max(eval_rewards):>14.1f}",     f"{max(rand_rewards):>12.1f}"),
+        ("Worst episode reward",f"{min(eval_rewards):>14.1f}",     f"{min(rand_rewards):>12.1f}"),
+    ]
+    for label, learned, random in metrics:
+        print(f"  {label:<30} {learned}  {random}")
+
+    # ── Walk through one demo episode step by step ────────────────────────────
+    print(f"\n[B] Demo run — episode 1 path ({len(demo_path)-1} steps)")
+    print(f"    Pickup={world.pickup_pos}  Packing={world.packing_pos}  Dock={world.dock_pos}")
+    print(f"    Path: ", end="")
+    for i, pos in enumerate(demo_path):
+        marker = ""
+        if pos == world.pickup_pos:
+            marker = "(P)"
+        elif pos == world.packing_pos:
+            marker = "(D)"
+        elif pos == world.dock_pos and i > 0:
+            marker = "(C)"
+        print(f"{pos}{marker}", end=" → " if i < len(demo_path) - 1 else "\n")
+
+    # ── Plot: training curve + evaluation comparison ──────────────────────────
+    try:
+        import matplotlib.pyplot as plt
+        import matplotlib
+
+        matplotlib.rcParams.update({"font.size": 11})
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5))
+        fig.suptitle(
+            f"Checkpoint 6 — Best Config Evaluation  (seed={SEED}, α={BEST_ALPHA}, γ={BEST_GAMMA})",
+            fontsize=13,
+        )
+
+        # Training curve
+        smoothed = np.convolve(
+            train_rewards, np.ones(SMOOTHING_WINDOW) / SMOOTHING_WINDOW, mode="valid"
+        )
+        ax1.plot(range(SMOOTHING_WINDOW, NUM_EPISODES + 1), smoothed,
+                 color="#2980b9", linewidth=1.8, label="Training (ε-greedy)")
+        ax1.axhline(np.mean(eval_rewards), color="#27ae60", linewidth=1.5,
+                    linestyle="--", label=f"Eval avg ({np.mean(eval_rewards):.1f})")
+        ax1.axhline(np.mean(rand_rewards), color="#e74c3c", linewidth=1.5,
+                    linestyle="--", label=f"Random avg ({np.mean(rand_rewards):.1f})")
+        ax1.set_xlabel("Episode")
+        ax1.set_ylabel(f"Cumulative reward (rolling avg {SMOOTHING_WINDOW}ep)")
+        ax1.set_title("Training Curve + Evaluation Baseline")
+        ax1.legend()
+        ax1.grid(True, alpha=0.3)
+
+        # Bar chart: learned vs random
+        labels   = ["Avg reward", "Success rate (%)"]
+        learned  = [np.mean(eval_rewards), np.mean(eval_successes) * 100]
+        random   = [np.mean(rand_rewards),  np.mean(rand_successes)  * 100]
+        x = np.arange(len(labels))
+        width = 0.35
+        ax2.bar(x - width / 2, learned, width, label="Learned policy", color="#2980b9")
+        ax2.bar(x + width / 2, random,  width, label="Random agent",   color="#e74c3c")
+        ax2.set_xticks(x)
+        ax2.set_xticklabels(labels)
+        ax2.set_title("Learned Policy vs Random Agent")
+        ax2.legend()
+        ax2.grid(True, alpha=0.3, axis="y")
+
+        plt.tight_layout()
+        plt.savefig("checkpoint6_evaluation.png", dpi=120, bbox_inches="tight")
+        print("\n[C] Plot saved → checkpoint6_evaluation.png")
+        plt.show()
+
+    except ImportError:
+        print("\n[C] matplotlib not found — skipping plot")
+
+    print("\n" + "=" * 60)
+    print("CHECKPOINT 6 COMPLETE — Epsilon-Greedy story is closed.")
+    print("Look at section [B] — the demo path — and think about:")
+    print("  • Does the path go directly to pickup → packing → dock?")
+    print("  • Or does it take a detour around congestion zones?")
+    print("    (That would be smart — the agent learned -10 isn't worth it)")
+    print("  • How many steps does the learned agent take vs the step limit (120)?")
+    print("  • The random agent occasionally succeeds too — why?")
+    print("    Does luck matter less as training episodes increase?")
+    print("=" * 60)
+
+    return q_table, eval_rewards, eval_successes
+
+
 if __name__ == "__main__":
     checkpoint_1_state_space()
     checkpoint_2_training_loop()
     checkpoint_3_alpha_experiments()
     checkpoint_4_gamma_experiments()
     checkpoint_5_epsilon_decay()
+    checkpoint_6_best_config_evaluation()
