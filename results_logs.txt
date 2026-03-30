@@ -1,0 +1,488 @@
+Assignment_2 git:(main) python3 COSC_4117EL_A2_G1-q_learning_epsilon.py    
+pygame 2.6.1 (SDL 2.28.4, Python 3.13.1)
+Hello from the pygame community. https://www.pygame.org/contribute.html
+============================================================
+CHECKPOINT 1 — State Space & Q-Table Initialization
+============================================================
+
+[1] Grid layout (seed=42)
+    Legend: . empty  # shelf  ! congestion  P pickup  D packing  C dock
+. . # . D . # . ! .
+. ! # . # . # . ! .
+. . P . # . . . . .
+# # # . # ! # # # .
+. . . . . . . ! . .
+. ! # # # . # . . .
+R . . ! . . # . ! .
+. # . # . # . . . .
+. # . . . # . ! . .
+. . . . . . . . . .
+Seed=42 State=(6, 0, 0, 0) Score=0 Steps=0
+Pickup=(2, 2) Packing=(0, 4) Dock=(6, 0)
+
+[2] State space breakdown
+    Grid positions  : 10 rows × 10 cols = 100 cells
+    has_package     : 2 values  (0 = no package, 1 = carrying)
+    delivered       : 2 values  (0 = not yet,    1 = delivered)
+    Total states    : 10² × 2 × 2 = 400
+    Actions         : 4  (['up', 'down', 'left', 'right'])
+    Q-table shape   : (400, 4)  →  1600 entries
+
+[3] Why (row, col) alone is not enough as a state
+    Same position (row, col) — three different situations:
+    (r, c, has_package=0, delivered=0) → agent must go find package
+    (r, c, has_package=1, delivered=0) → agent must go deliver package
+    (r, c, has_package=0, delivered=1) → agent must return to dock
+    Without these flags the agent cannot distinguish what to do next.
+
+[4] State → linear index examples
+    (6, 0, 0, 0)                    index=240   (start (at dock, no package))
+    (2, 2, 0, 0)                    index= 88   (at pickup — before pickup)
+    (2, 2, 1, 0)                    index= 90   (at pickup — after pickup)
+    (0, 4, 1, 0)                    index= 18   (at packing — carrying package)
+    (0, 4, 0, 1)                    index= 17   (at packing — after delivery)
+    (6, 0, 0, 1)                    index=241   (back at dock — DONE)
+
+[5] Q-table initialized to zeros
+    Shape : (400, 4)
+    Sum   : 0.0   ← agent has no preference yet
+    What Q(s,a)=0 means:
+      The agent has NO knowledge of which action is best in any state.
+      Every action looks equally good (or equally bad).
+      Training will fill these values with experience.
+
+    Q-table row for start state (6, 0, 0, 0) (index 240):
+      Q((6, 0, 0, 0), 'up') = 0.00
+      Q((6, 0, 0, 0), 'down') = 0.00
+      Q((6, 0, 0, 0), 'left') = 0.00
+      Q((6, 0, 0, 0), 'right') = 0.00
+
+[6] Valid actions from start position (walls limit choices)
+    Position      : (6, 0)
+    Valid actions : ['up', 'down', 'right']
+    Blocked       : ['left']  ← hitting these costs -3 and wastes a step
+
+============================================================
+CHECKPOINT 1 COMPLETE
+Before moving on, think about:
+  • Why would Q(s,a)=0 everywhere cause the agent to wander randomly?
+  • Why do we need delivered=1 as a separate flag from has_package=0?
+  • What would happen if we forgot the task-progress flags?
+============================================================
+
+============================================================
+CHECKPOINT 2 — Bare-Bones Training Loop
+  alpha=0.3  gamma=0.95  episodes=500
+============================================================
+
+Layout: Pickup=(2, 2)  Packing=(0, 4)  Dock=(6, 0)
+
+Training (500 episodes) ...
+  Episode   50/500 | ε=0.905 | Avg reward (last 50):  -345.8 | Success rate:   0.0%
+  Episode  100/500 | ε=0.810 | Avg reward (last 50):  -286.7 | Success rate:   4.0%
+  Episode  150/500 | ε=0.715 | Avg reward (last 50):  -125.0 | Success rate:  56.0%
+  Episode  200/500 | ε=0.620 | Avg reward (last 50):   -16.7 | Success rate:  90.0%
+  Episode  250/500 | ε=0.525 | Avg reward (last 50):    57.1 | Success rate:  98.0%
+  Episode  300/500 | ε=0.430 | Avg reward (last 50):    84.5 | Success rate: 100.0%
+  Episode  350/500 | ε=0.335 | Avg reward (last 50):    98.6 | Success rate: 100.0%
+  Episode  400/500 | ε=0.240 | Avg reward (last 50):   118.7 | Success rate: 100.0%
+  Episode  450/500 | ε=0.145 | Avg reward (last 50):   128.0 | Success rate: 100.0%
+  Episode  500/500 | ε=0.050 | Avg reward (last 50):   135.2 | Success rate: 100.0%
+
+[A] Overall training results
+    Total successes      : 374 / 500
+    Success rate         : 74.8%
+    Avg reward (all)     : -15.2
+    Avg reward (last 100): 131.6
+    Best episode reward  : 143.0
+
+[B] Q-table at START state (6, 0, 0, 0) after training
+    (before training every value was 0.0)
+      Q(start, 'up') =    60.74  ██████████████████████████████
+      Q(start, 'down') =    52.87  ██████████████████████████
+      Q(start, 'left') =    53.70  ██████████████████████████
+      Q(start, 'right') =    52.87  ██████████████████████████
+    → Learned best first move: 'up'
+
+[C] Q-table at PICKUP state (2, 2, 0, 0)
+      Q(pickup, 'up') =     0.00
+      Q(pickup, 'down') =     0.00
+      Q(pickup, 'left') =     0.00
+      Q(pickup, 'right') =     0.00
+
+[D] Learning progression
+    Episodes   1– 50 | Avg reward:  -345.8 | Success:   0.0%
+    Episodes 101–150 | Avg reward:  -125.0 | Success:  56.0%
+    Episodes 251–300 | Avg reward:    84.5 | Success: 100.0%
+    Episodes 451–500 | Avg reward:   135.2 | Success: 100.0%
+
+============================================================
+CHECKPOINT 2 COMPLETE
+Before moving on, think about:
+  • Why are early episode rewards low/negative?
+  • Why does the reward increase over time?
+  • What does it mean if the Q-value for 'up' at the start is high?
+  • Is the success rate still climbing, or has it leveled off?
+============================================================
+
+============================================================
+CHECKPOINT 3 — Alpha (Learning Rate) Experiments
+  alphas=[0.1, 0.3, 0.5, 0.7]  gamma=0.95  episodes=500
+============================================================
+
+  Training alpha=0.1 ...
+
+  Training alpha=0.3 ...
+
+  Training alpha=0.5 ...
+
+  Training alpha=0.7 ...
+
+[A] Results summary
+   Alpha |   Avg reward (all) |  Avg reward (last 100) |  Success rate (last 100) |  Converges ~ep
+  -----------------------------------------------------------------------------------------------
+     0.1 |              -31.4 |                  131.8 |                   100.0% |        ~ep 213
+     0.3 |              -16.7 |                  133.2 |                   100.0% |        ~ep 181
+     0.5 |               -9.5 |                  130.7 |                   100.0% |        ~ep 172
+     0.7 |              -19.4 |                  132.1 |                   100.0% |        ~ep 190
+
+[B] Reward progression across training windows
+        Window | α=0.1  | α=0.3  | α=0.5  | α=0.7 
+  ------------------------------------------------
+  ep   1– 50  |  -341.1 |  -333.3 |  -316.9 |  -346.3
+  ep 101–150  |  -203.3 |  -178.0 |  -112.1 |  -153.6
+  ep 251–300  |    84.6 |    73.9 |    89.8 |    79.6
+  ep 451–500  |   136.2 |   137.9 |   133.1 |   135.6
+
+[C] Plot saved → checkpoint3_alpha_experiments.png
+
+============================================================
+CHECKPOINT 3 COMPLETE
+Look at the plots and think about:
+  • Which alpha converges fastest (reaches high success rate earliest)?
+  • Which alpha has the smoothest reward curve vs the noisiest?
+  • Does high alpha (0.7) ever hurt the agent — does the curve dip?
+  • At α=0.1, is the agent still improving at episode 500,
+    or has it leveled off?  What does that tell you about step size?
+============================================================
+
+============================================================
+CHECKPOINT 4 — Gamma (Discount Factor) Experiments
+  gammas=[0.7, 0.9, 0.99]  alpha=0.5  episodes=500
+============================================================
+
+  Training gamma=0.7 ...
+
+  Training gamma=0.9 ...
+
+  Training gamma=0.99 ...
+
+[A] Results summary
+   Gamma |   Avg reward (all) |  Avg reward (last 100) |  Success rate (last 100) |  Converges ~ep
+  -----------------------------------------------------------------------------------------------
+    0.70 |              -13.3 |                  133.3 |                   100.0% |        ~ep 171
+    0.90 |              -13.3 |                  132.5 |                   100.0% |        ~ep 173
+    0.99 |              -14.2 |                  132.1 |                   100.0% |        ~ep 168
+
+[B] How much is the dock reward (+100) worth from N steps away?
+    (discounted value = gamma^N * 100)
+    Steps away | γ=0.7 | γ=0.9 | γ=0.99
+  --------------------------------------------------
+           5 s |   16.81 |   59.05 |   95.10
+          10 s |    2.82 |   34.87 |   90.44
+          15 s |    0.47 |   20.59 |   86.01
+          20 s |    0.08 |   12.16 |   81.79
+          30 s |    0.00 |    4.24 |   73.97
+    → A short-sighted agent can't 'see' the dock reward from far away.
+
+[C] Q-values at the dock state after delivery
+    State = (dock_row, dock_col, has_package=0, delivered=1)
+    This state immediately precedes the terminal reward (+100).
+    Higher Q-values here = agent more strongly attracted to dock.
+
+    γ=0.7: Q-values=[0. 0. 0. 0.]  best='up'
+    γ=0.9: Q-values=[0. 0. 0. 0.]  best='up'
+    γ=0.99: Q-values=[0. 0. 0. 0.]  best='up'
+
+[D] Reward progression across training windows
+        Window | γ=0.7   | γ=0.9   | γ=0.99 
+  ------------------------------------------
+  ep   1– 50  |   -329.7 |   -347.6 |   -337.5
+  ep 101–150  |   -141.2 |   -139.1 |   -127.0
+  ep 251–300  |     85.9 |     92.6 |     82.1
+  ep 451–500  |    137.2 |    136.8 |    135.5
+
+[E] Plot saved → checkpoint4_gamma_experiments.png
+
+============================================================
+CHECKPOINT 4 COMPLETE
+Look at the plots and think about:
+  • Does γ=0.7 ever achieve consistent success? Why or why not?
+  • Look at section [B]: from 20 steps away, how much of the +100
+    dock reward does each agent 'see'? Does that match the success rate?
+  • γ=0.99 values far-future rewards almost fully — does it converge
+    faster or slower than γ=0.9? What does that tell you?
+============================================================
+
+============================================================
+CHECKPOINT 5 — Epsilon Decay (Exploration Schedule) Experiments
+  schedules=['fast', 'medium', 'slow']  alpha=0.5  gamma=0.9
+============================================================
+
+  Training 'fast' decay (ε hits min at ep 100) ...
+
+  Training 'medium' decay (ε hits min at ep 300) ...
+
+  Training 'slow' decay (ε hits min at ep 480) ...
+
+[A] Results summary
+  Schedule |  Decay ep |  Avg reward (all) |  Avg reward (last 100) |  Success (last 100) |  Converges ~ep
+  ----------------------------------------------------------------------------------------------------
+      fast |       100 |              96.4 |                  140.1 |              100.0% |         ~ep 68
+    medium |       300 |              40.7 |                  140.4 |              100.0% |        ~ep 125
+      slow |       480 |              -4.6 |                  133.7 |              100.0% |        ~ep 188
+
+[B] Epsilon value at key training milestones
+    Episode |     fast |   medium |     slow
+  ---------------------------------------------
+         50 |    0.534 |    0.845 |    0.903
+        100 |    0.059 |    0.686 |    0.804
+        200 |    0.050 |    0.370 |    0.606
+        300 |    0.050 |    0.053 |    0.408
+        400 |    0.050 |    0.050 |    0.210
+        500 |    0.050 |    0.050 |    0.050
+    → When ε is high the agent is still exploring; low = exploiting.
+
+[C] Success rate in early training (eps 1–150)
+    'Fast' exploits early — but was the Q-table ready?
+        fast: success rate ep 1–150 = 69.3%
+      medium: success rate ep 1–150 = 42.7%
+        slow: success rate ep 1–150 = 30.0%
+
+[D] Reward progression across training windows
+        Window |     fast |   medium |     slow
+  ---------------------------------------------
+  ep   1– 50  |   -243.3 |   -333.9 |   -342.4
+  ep 101–150  |    139.7 |     16.5 |   -100.3
+  ep 251–300  |    139.9 |    134.1 |     81.3
+  ep 451–500  |    140.0 |    140.6 |    138.4
+
+[E] Plot saved → checkpoint5_epsilon_decay.png
+
+============================================================
+CHECKPOINT 5 COMPLETE
+Look at the plots and think about:
+  • The LEFT plot shows ε over time — when does each schedule
+    commit to exploitation? Overlay this mentally with the reward curve.
+  • Does 'fast' ever catch up to 'medium' by episode 500?
+    If not — what did it miss by stopping exploration at ep 100?
+  • Does 'slow' suffer in the middle of training even if it recovers?
+  • Which schedule would you pick for a REAL robot with limited
+    training time? What if training time were unlimited?
+============================================================
+
+============================================================
+CHECKPOINT 6 — Best Config + Evaluation Run
+  alpha=0.5  gamma=0.9  decay=medium  episodes=500
+============================================================
+
+Layout: Pickup=(2, 2)  Packing=(0, 4)  Dock=(6, 0)
+
+Training best config ...
+  Training success rate (last 100): 100.0%
+
+Evaluating learned policy over 100 episodes (ε=0, no learning) ...
+Running random baseline over 100 episodes ...
+
+[A] Learned policy vs random agent
+  Metric                           Learned policy   Random agent
+  --------------------------------------------------------------
+  Avg reward                              143.0        -352.1
+  Avg steps to finish                      22.0         120.0
+  Success rate                           100.0%          0.0%
+  Best episode reward                     143.0        -197.0
+  Worst episode reward                    143.0        -582.0
+
+[B] Demo run — episode 1 path (22 steps)
+    Pickup=(2, 2)  Packing=(0, 4)  Dock=(6, 0)
+    Path: (6, 0) → (5, 0) → (4, 0) → (4, 1) → (4, 2) → (4, 3) → (3, 3) → (2, 3) → (2, 2)(P) → (2, 3) → (1, 3) → (0, 3) → (0, 4)(D) → (0, 3) → (1, 3) → (2, 3) → (3, 3) → (4, 3) → (4, 2) → (4, 1) → (4, 0) → (5, 0) → (6, 0)(C)
+
+[C] Plot saved → checkpoint6_evaluation.png
+
+============================================================
+CHECKPOINT 6 COMPLETE — Epsilon-Greedy story is closed.
+Look at section [B] — the demo path — and think about:
+  • Does the path go directly to pickup → packing → dock?
+  • Or does it take a detour around congestion zones?
+    (That would be smart — the agent learned -10 isn't worth it)
+  • How many steps does the learned agent take vs the step limit (120)?
+  • The random agent occasionally succeeds too — why?
+    Does luck matter less as training episodes increase?
+============================================================
+
+Generating policy arrows & value function ...
+  Policy/value plot saved → policy_arrows_Epsilon-Greedy_Policy_α=0.5_γ=0.9_seed=4.png
+
+Launching Epsilon-Greedy pygame demo ...
+Close the window or press any key to exit.
+  Epsilon-greedy demo — TIMEOUT in 12 steps, score=53
+Assignment_2 git:(main) ✗ python3 COSC_4117EL_A2_G1-q_learning_exploration.py
+pygame 2.6.1 (SDL 2.28.4, Python 3.13.1)
+Hello from the pygame community. https://www.pygame.org/contribute.html
+============================================================
+CHECKPOINT 7 — Exploration Bonus Agent
+  k values=[0.5, 2.0, 5.0]  alpha=0.5  gamma=0.9  episodes=500
+============================================================
+
+[1] How the bonus k/sqrt(N+1) shrinks as a state-action is visited more
+    N (visits) | k=0.5   | k=2.0   | k=5.0  
+  ---------------------------------------------
+             0 |   0.500 |   2.000 |   5.000
+             1 |   0.354 |   1.414 |   3.536
+             5 |   0.204 |   0.816 |   2.041
+            10 |   0.151 |   0.603 |   1.508
+            25 |   0.098 |   0.392 |   0.981
+            50 |   0.070 |   0.280 |   0.700
+           100 |   0.050 |   0.199 |   0.498
+           500 |   0.022 |   0.089 |   0.223
+    → At N=0 (never visited), bonus is k — pure curiosity.
+    → At N=500, bonus ≈ 0 — agent trusts Q-values entirely.
+
+  Training k=0.5 ...
+
+  Training k=2.0 ...
+
+  Training k=5.0 ...
+
+[2] Results summary
+      k |   Avg reward (all) |  Avg reward (last 100) |  Success (last 100) |  States visited
+  ------------------------------------------------------------------------------------------
+    0.5 |              129.5 |                  143.0 |              100.0% |             191
+    2.0 |              130.1 |                  143.0 |              100.0% |             176
+    5.0 |              128.7 |                  143.0 |              100.0% |             176
+
+[3] State-space coverage: unique (state, action) pairs visited
+  k=0.5: 724 / 1600 pairs visited  (45.2%)  avg visits per pair: 18.5
+  k=2.0: 663 / 1600 pairs visited  (41.4%)  avg visits per pair: 20.1
+  k=5.0: 653 / 1600 pairs visited  (40.8%)  avg visits per pair: 20.5
+
+[4] Reward progression across training windows
+        Window | k=0.5    | k=2.0    | k=5.0   
+  ---------------------------------------------
+  ep   1– 50  |      7.6 |     13.5 |     -0.5
+  ep 101–150  |    143.0 |    143.0 |    143.0
+  ep 251–300  |    143.0 |    143.0 |    143.0
+  ep 451–500  |    143.0 |    143.0 |    143.0
+
+[5] Most-visited actions at the start state
+  Start state: (6, 0, 0, 0)
+  k=0.5: up=499  down=13  left=3  right=13
+  k=2.0: up=500  down=15  left=3  right=15
+  k=5.0: up=501  down=15  left=4  right=14
+
+[6] Plot saved → checkpoint7_exploration_bonus.png
+
+============================================================
+CHECKPOINT 7 COMPLETE
+Look at the plots and think about:
+  • Section [1]: at N=0, the bonus equals k exactly.
+    Which k would push the agent hardest toward unvisited pairs?
+  • Section [3]: does higher k visit MORE unique states?
+    What does that tell you about how k controls curiosity?
+  • Right plot (visit distribution): is one k more 'uniform'?
+    A uniform distribution means the agent explored everywhere evenly.
+  • Does k=0.5 converge faster because it exploits earlier?
+    Is that the same tradeoff as fast epsilon decay?
+============================================================
+
+============================================================
+CHECKPOINT 8 — Head-to-Head Comparison (Multiple Seeds)
+  Seeds=[42, 99, 123]
+  Epsilon-greedy: α=0.5, γ=0.9, medium decay
+  Exploration bonus: α=0.5, γ=0.9, k=2.0
+============================================================
+
+  Seed 42 ...
+    Layout: Pickup=(2, 2)  Packing=(0, 4)  Dock=(6, 0)
+
+  Seed 99 ...
+    Layout: Pickup=(8, 0)  Packing=(7, 7)  Dock=(4, 2)
+
+  Seed 123 ...
+    Layout: Pickup=(0, 9)  Packing=(5, 8)  Dock=(2, 0)
+
+[A] Per-seed results
+
+  Method                 |  Seed |  Avg reward |  Last-100 reward |  Success rate |  Converges ~ep
+  -----------------------------------------------------------------------------------------------
+  Epsilon-greedy         |    42 |        40.1 |            139.6 |        100.0% |        ~ep 122
+  Exploration bonus      |    42 |       130.1 |            143.0 |        100.0% |         ~ep 35
+  -----------------------------------------------------------------------------------------------
+  Epsilon-greedy         |    99 |        20.4 |            126.9 |        100.0% |        ~ep 140
+  Exploration bonus      |    99 |       108.3 |            125.0 |        100.0% |         ~ep 42
+  -----------------------------------------------------------------------------------------------
+  Epsilon-greedy         |   123 |       -16.1 |            121.0 |        100.0% |        ~ep 185
+  Exploration bonus      |   123 |       104.0 |            127.0 |        100.0% |         ~ep 52
+  -----------------------------------------------------------------------------------------------
+
+[B] Aggregated across all seeds (robustness summary)
+  Metric                                Epsilon-greedy  Exploration bonus
+  ----------------------------------------------------------------------
+  Mean last-100 reward                         129.2             131.7
+  Std last-100 reward (↓ better)                 7.8               8.1
+  Mean success rate %                         100.0%            100.0%
+  Std success rate (↓ better)                   0.0%              0.0%
+  Mean convergence episode                       149                43
+
+  Std = standard deviation across seeds.
+  Lower std = more robust (performs consistently regardless of layout).
+
+[C] Plot saved → checkpoint8_head_to_head.png
+
+============================================================
+CHECKPOINT 8 COMPLETE
+Look at section [B] and the plots — think about:
+  • Which method has LOWER std across seeds?
+    Lower std = more robust = works regardless of layout.
+  • Do both methods fail on any seed, or do both always converge?
+  • Does the gap between them grow or shrink on harder layouts?
+    (Seeds 99 and 123 have different pickup/packing/dock positions.)
+  • Which would you trust on a layout you have never seen before?
+============================================================
+
+============================================================
+CHECKPOINT 9 — Visualization
+============================================================
+
+Training Epsilon-Greedy (α=0.5, γ=0.9, medium decay) ...
+  Re-training to capture Q-table ...
+
+Training Exploration Bonus (α=0.5, γ=0.9, k=2.0) ...
+
+[1] Generating combined comparison plot ...
+  Plot saved → checkpoint9_combined_comparison.png
+
+[1b] Policy arrows — Epsilon-Greedy ...
+  Policy/value plot saved → policy_arrows_Epsilon-Greedy_Policy_α=0.5_γ=0.9_seed=4.png
+
+[1c] Policy arrows — Exploration Bonus ...
+  Policy/value plot saved → policy_arrows_Exploration_Bonus_Policy_k=2.0_α=0.5_γ=0.png
+
+[2] Launching Epsilon-Greedy demo (watch the robot navigate) ...
+    Close the window or press any key to continue.
+  Demo finished — TIMEOUT in 7 steps, score=-7
+
+[3] Launching Exploration Bonus demo ...
+    Close the window or press any key to continue.
+  Demo finished — TIMEOUT in 3 steps, score=-3
+
+============================================================
+CHECKPOINT 9 COMPLETE — All checkpoints finished.
+
+While watching the two demos, notice:
+  • Do both agents take the same path or different routes?
+  • Does either agent detour around congestion zones (red cells)?
+  • Which agent moves more 'confidently' — fewer hesitations?
+    (Hesitation = revisiting the same cell, which means the Q-table
+     has conflicting values for neighbouring actions.)
+============================================================
